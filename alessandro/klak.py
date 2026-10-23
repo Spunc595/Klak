@@ -99,6 +99,20 @@ TABELLE = {
     chess.ROOK: TORRE, 
     chess.QUEEN: DONNA,
 }
+
+# PST[colore][tipo][casa] = valore del pezzo + bonus della casa (già specchiato)
+PST = {chess.WHITE: {}, chess.BLACK: {}}
+for tipo, tab in TABELLE.items():
+    # Quindi sarebbe PST{ chess.WHITE{ chess.PAWN : +90 } }
+    PST[chess.WHITE][tipo] = [VALORI[tipo] + tab[chess.square_mirror(c)] for c in chess.SQUARES]
+    PST[chess.BLACK][tipo] = [VALORI[tipo] + tab[c] for c in chess.SQUARES]
+
+# re: una tabella per fase e per colore
+RE_PST = {}
+for fase, tab in (("medio", RE_MEDIOGIOCO), ("finale", RE_FINALE)):
+    RE_PST[fase, chess.WHITE] = [tab[chess.square_mirror(c)] for c in chess.SQUARES]
+    RE_PST[fase, chess.BLACK] = [tab[c] for c in chess.SQUARES]
+
 NODI=0
 
 # =====================================
@@ -149,16 +163,25 @@ MATTO = 100000
 
 def negamax(board, profondita, alfa, beta):
     global NODI
-    NODI+=1
-    # è come una piccola valuta_posizione
-    if board.is_checkmate():
-        return -MATTO - profondita     # matto subito = peggio di matto tra un po'
-    if board.is_stalemate() or board.is_insufficient_material() or board.is_repetition(3):
+    NODI += 1
+
+    # patte: controlli solo quando possono essere vere
+    if board.halfmove_clock >= 4 and board.is_repetition(2):
         return 0
+    if board.halfmove_clock >= 100:          # regola delle 50 mosse
+        return 0
+    if chess.popcount(board.occupied) <= 4 and board.is_insufficient_material():
+        return 0
+
+    # mosse generate UNA volta: servono sia per matto/stallo sia per il for
+    mosse = list(board.legal_moves)
+    if not mosse:
+        return (-MATTO - profondita) if board.is_check() else 0
+
     if profondita == 0:
         return quiescenza(board, alfa, beta)
 
-    for mossa in ordina(board, board.legal_moves):
+    for mossa in ordina(board, mosse):
         board.push(mossa)
         punteggio = -negamax(board, profondita - 1, -beta, -alfa)
         board.pop()
@@ -190,33 +213,28 @@ def pezzo_catturato(board, mossa):
     return board.piece_at(mossa.to_square)
 
 def is_finale(board):
-    # capisce se è un finale
-    donne = len(board.pieces(chess.QUEEN, chess.WHITE)) + len(board.pieces(chess.QUEEN, chess.BLACK))
-    pezzi = 0
-    for tipo in (chess.KNIGHT, chess.BISHOP, chess.ROOK):
-        pezzi += (len(board.pieces(tipo, chess.WHITE)) + len(board.pieces(tipo, chess.BLACK))) * VALORI[tipo]
-    return donne == 0 or pezzi <= 1300
+    pc = chess.popcount
+    pezzi = pc(board.knights) * 300 + pc(board.bishops) * 320 + pc(board.rooks) * 500
+    return board.queens == 0 or pezzi <= 1300
 
 def valuta_posizione(board, colore):
-    # Materiale + posizione, dal punto di vista del colore
-    finale = is_finale(board)
+    fase = "finale" if is_finale(board) else "medio"
     totale = 0
-    for casa, pezzo in board.piece_map().items():
-        # vede se il pezzo è il re
-        if pezzo.piece_type == chess.KING:
-            tabella = RE_FINALE if finale else RE_MEDIOGIOCO
-            # e gli assegna la tabella (mediogioco vs finale)
-        else:
-            # prende la tabella del pezzo
-            tabella = TABELLE[pezzo.piece_type]
-
-        indice = chess.square_mirror(casa) if pezzo.color == chess.WHITE else casa 
-        # le caselle sono al contrario, quindi per capire l'indice del pezzo, se è bianco, capovolge la scacchiera
-        valore = VALORI[pezzo.piece_type] + tabella[indice]
-        # fa il valoer del pezzo + il valore della casella (es. pedone in e4 = 100 + 20 = 120 che è meglio di pedone e2 = 100 + (-20) = 80!!)
-
-        totale += valore if pezzo.color == colore else -valore
-        # vede se il pezzo è mio o dell'avversario e di conseguenza aggiunge o toglie il valore calcolato
+    # c = chess.WHITE
+    for c in (chess.WHITE, chess.BLACK):
+        miei = board.occupied_co[c]
+        s = 0
+        # tipo = chess.PAWN, bb = board.pawns
+        for tipo, bb in ((chess.PAWN, board.pawns), (chess.KNIGHT, board.knights),
+                         (chess.BISHOP, board.bishops), (chess.ROOK, board.rooks),
+                         (chess.QUEEN, board.queens)):
+            # tab = PST[chess.WHITE][chess.PAWN]
+            tab = PST[c][tipo]
+            for casa in chess.scan_forward(bb & miei):
+                s += tab[casa]
+        s += RE_PST[fase, c][board.king(c)]
+        # se si è bianchi, aggiunge, sennò toglie
+        totale += s if c == colore else -s
     return totale
 
 def materiale(board, colore):
