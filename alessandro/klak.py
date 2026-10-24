@@ -113,11 +113,21 @@ for fase, tab in (("medio", RE_MEDIOGIOCO), ("finale", RE_FINALE)):
     RE_PST[fase, chess.WHITE] = [tab[chess.square_mirror(c)] for c in chess.SQUARES]
     RE_PST[fase, chess.BLACK] = [tab[c] for c in chess.SQUARES]
 
-NODI=0
+NODI = 0
+SCADENZA = 0.0
+
+# Serve a dire quando il tempo è scaduto
+class Tempo_scaduto(Exception):
+    pass
 
 # =====================================
 # FINE DI TUTTI I VALORI
 # =====================================
+
+def controlla_tempo():
+    # time.time() costa: lo chiamiamo solo ogni 1024 nodi
+    if NODI % 1024 == 0 and time.time() > SCADENZA:
+        raise Tempo_scaduto
 
 # Vede il punteggio delle mosse più 'attraenti' così l'alpha-beta deve fare meno lavoro
 
@@ -143,6 +153,7 @@ def priorita(board, mossa):
 def quiescenza(board, alfa, beta):
     global NODI
     NODI+=1
+    controlla_tempo()
     fermo = valuta_posizione(board, board.turn)
     if fermo >= beta:
         return beta
@@ -164,6 +175,7 @@ MATTO = 100000
 def negamax(board, profondita, alfa, beta):
     global NODI
     NODI += 1
+    controlla_tempo()
 
     # patte: controlli solo quando possono essere vere
     if board.halfmove_clock >= 4 and board.is_repetition(2):
@@ -190,18 +202,46 @@ def negamax(board, profondita, alfa, beta):
         alfa = max(alfa, punteggio)
     return alfa
 
-def cerca(board, profondita):
+def cerca_iterativa(board, secondi, prof_max=64):
+    global SCADENZA
+    inizio = time.time()
+    SCADENZA = inizio + secondi
+
+    b = board.copy() # se il tempo scade, b resta "sporca": non importa
+    mosse = list(b.legal_moves)
+    if len(mosse) == 1:
+        return mosse[0] # mossa obbligata: inutile pensare
+    random.shuffle(mosse) # si da veriabilità alle mosse
+    mosse = ordina(b, mosse)
+    migliore = mosse[0]
+
+    for prof in range(1, prof_max + 1):
+        # prova ad assegnare la mossa migliore a meno che il tempo non scada
+        try:
+            m, punteggio = cerca(b, prof, mosse) # m = migliore, punteggio = alfa
+        except Tempo_scaduto:
+            break # profondità incompleta: si tiene la precedente
+        migliore = m
+        print(f"  prof {prof}: {b.san(m)} ({punteggio}) dopo {time.time() - inizio:.2f}s")
+
+        mosse.remove(m)                    # la migliore in testa per il giro dopo
+        mosse.insert(0, m)
+
+        if abs(punteggio) >= MATTO:        # trovato un matto: più a fondo non serve
+            break
+        if time.time() - inizio > secondi * 0.5:
+            break                          # il prossimo livello non farebbe in tempo
+    return migliore
+
+def cerca(board, profondita, mosse):
     migliore, alfa = None, -INF
-    mosse = list(board.legal_moves)
-    random.shuffle(mosse)
-    mosse = ordina(board, mosse)
     for mossa in mosse:
         board.push(mossa)
         p = -negamax(board, profondita - 1, -INF, -alfa)
         board.pop()
         if p > alfa:
             alfa, migliore = p, mossa
-    return migliore
+    return migliore, alfa # Ora ritorna anche alfa in modo che il processo possa venire interrotto sempre
 
 def pezzo_catturato(board, mossa):
     if not board.is_capture(mossa):
@@ -248,13 +288,13 @@ def materiale(board, colore):
 n_mosse=0
 nodi_s_media=0
 
-def mossa_motore(board, prof):
+def mossa_motore(board, secondi):
     mosse = list(board.legal_moves)
     random.shuffle(mosse)        # varietà tra mosse con lo stesso punteggio
     global NODI
     NODI = 0
     t = time.time()
-    migliore = cerca(board, prof)
+    migliore = cerca_iterativa(board, secondi)
     dt = time.time() - t
     print(f"{NODI} nodi in {dt:.2f}s ({NODI/dt:.0f} nodi/s)")
     global n_mosse
@@ -266,11 +306,18 @@ def mossa_motore(board, prof):
     print("Il motore gioca:", board.san(migliore))
     return board.push(migliore)
 
-def gioca(board, prof, colore_motore=chess.BLACK):
+def gioca(board, tempo, colore_motore=chess.BLACK):
     print(board)
+    secondi=10
     while not board.is_game_over(claim_draw=True):
         if board.turn == colore_motore:
-            mossa_motore(board, prof)
+            secondi=tempo/30
+            inizio=time.time()
+            mossa_motore(board, secondi)
+            fine=time.time()
+            tempo=tempo-(fine-inizio)
+            minuti, secondi_rest = divmod(tempo, 60)
+            print(f"Tempo per il motore: {int(minuti)}min {secondi_rest:.1f}s")
         else:
             testo = input("La tua mossa: ")
             try:
@@ -281,10 +328,17 @@ def gioca(board, prof, colore_motore=chess.BLACK):
         print(board)
     print("Risultato:", board.result(claim_draw=True))
 
-def gioca_solo(board, prof):
+def gioca_solo(board, tempo):
     print(board)
+    secondi=10
     while not board.is_game_over(claim_draw=True):
-        mossa_motore(board, prof)       
+        secondi=tempo/30
+        inizio=time.time()
+        mossa_motore(board, secondi)
+        fine=time.time()
+        tempo=tempo-(fine-inizio)   
+        minuti, secondi_rest = divmod(tempo, 60)
+        print(f"Tempo per il motore: {int(minuti)}min {secondi_rest:.1f}s")
         print(board)
     print("Risultato:", board.result(claim_draw=True))
     
@@ -292,13 +346,15 @@ def gioca_solo(board, prof):
     print(partita)
 
 if __name__=='__main__':
-    prof=0
-    prof=input("Profondita? ")
+    tempo=0
+    tempo=input("tempo? ")
+    while True:
+        try:
+            tempo_int=int(tempo)
+            break
 
-    try:
-        prof_int=int(prof)
+        except ValueError:
+            print("Valore sbagliato!")
 
-    except ValueError:
-        print("Valore sbagliato!")
     board=chess.Board()
-    gioca_solo(board, prof_int)
+    gioca_solo(board, tempo_int)
