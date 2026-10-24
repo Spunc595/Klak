@@ -62,7 +62,7 @@ In Google Colab la prima riga di una cella è `!pip install chess`.
 
 ### Autori
 
-Daniele e suo figlio Alessandro. Il codice di ogni cartella è di chi l'ha scritto.
+Daniele e suo figlio Alessandro, che ha anche fatto altri progetti come [GrapeScript](https://github.com/alemarpino-rgb/GrapeScript), un intero linguaggio di programmazione! . Il codice di ogni cartella è di chi l'ha scritto.
 
 ### Licenza
 
