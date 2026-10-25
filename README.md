@@ -20,7 +20,7 @@ Ci sono due versioni di partenza, indipendenti tra loro:
 
 | Cartella | Autore | Cosa fa |
 | --- | --- | --- |
-| `daniele/` | Daniele | **Klak 0.0.0**: la versione più semplice. Gioca partite intere scegliendo mosse a caso. È la base da cui si impara. |
+| `daniele/` | Daniele | **Klak v0.0.0**: la versione più semplice. Gioca partite intere scegliendo mosse a caso. È la base da cui si impara. |
 | `alessandro/` | [Alessandro](https://github.com/alemarpino-rgb), figlio di Daniele | Un motore completo e funzionante. |
 
 Le due cartelle restano com'è giusto che sia: sono la storia del progetto.
