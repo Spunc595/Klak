@@ -57,7 +57,7 @@ def mossa_migliore (scacchiera, profondita):
     return migliore_mossa, migliore
 
 
-while not scacchiera.is_ game_over () and scacchiera.fullmove_number < 40:
+while not scacchiera.is_game_over () and scacchiera.fullmove_number < 40:
     if scacchiera.turn == chess.WHITE:
         migliore_mossa, valore = mossa_migliore (scacchiera, 2)
         scacchiera.push (migliore_mossa)
