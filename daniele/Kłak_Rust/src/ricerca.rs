@@ -121,7 +121,7 @@ pub fn cerca_con_tempo(pos: &Chess, secondi: f64, storia: &mut Vec<u64>) -> Opti
     let mut durata_ultima = 0.0;
     loop {
         let passati = inizio.elapsed().as_secs_f64();
-        if passati + durata_ultima * 8.0 > secondi || profondita > 64 {
+        if (profondita > 1 && passati + durata_ultima * 8.0 > secondi) || profondita > 64 {
             break;
         }
         let inizio_iter = Instant::now();
@@ -156,9 +156,13 @@ fn cerca(
     q_nodes: &mut u64,
 ) -> i32 {
     *s_nodes += 1;
-    if quante_volte(storia, chiave(pos)) >= 2 {
-        return 0;
-    }
+    let h = match storia.last() {
+        Some(&x) => x,
+         None => 0,
+};
+if quante_volte(storia, h) >= 2 {
+    return 0;
+}
 
     if profondita <= 0 {
         return quiescenza(pos, alfa, beta, q_nodes);

@@ -17,7 +17,7 @@ fn main() {
     for riga in stdin.lock().lines() {
         let riga = riga.unwrap();
         if riga == "uci" {
-            println!("id name Kłak v1.1.0");
+            println!("id name Kłak v1.2.0");
             println!("id author Daniele Marpino");
             println!("uciok");
         } else if riga == "isready" {
@@ -53,9 +53,16 @@ fn main() {
                 "btime"
             };
             let mut secondi = 2.0;
-            if let Some(posto) = parole.iter().position(|&p| p == nome) {
-                let millisecondi: f64 = parole[posto + 1].parse().unwrap();
-                secondi = millisecondi / 20000.0;
+            let nome_inc = if pos.turn() == Color::White {
+                "winc"
+            } else {
+                "binc"
+            };
+            if let Some(ms) = leggi_numero(&parole, "movetime") {
+                secondi = ms / 2000.0;
+            } else if let Some(tempo) = leggi_numero(&parole, nome) {
+                let incremento = leggi_numero(&parole, nome_inc).unwrap_or(0.0);
+                secondi = (tempo / 20000.0 + incremento / 2000.0).min(tempo / 2000.0);
             }
             let migliore = cerca_con_tempo(&pos, secondi, &mut storia);
             match migliore {
@@ -76,4 +83,15 @@ fn main() {
             break;
         }
     }
+}
+
+fn leggi_numero(parole: &Vec<&str>, nome: &str) -> Option<f64> {
+    if let Some(posto) = parole.iter().position(|&p| p == nome) {
+        if let Some(testo) = parole.get(posto + 1) {
+            if let Ok(numero) = testo.parse::<f64>() {
+                return Some(numero);
+            }
+        }
+    }
+    None
 }
